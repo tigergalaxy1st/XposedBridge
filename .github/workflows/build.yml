@@ -1,0 +1,41 @@
+name: Build API JAR
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build-api-jar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+      - name: Install Android SDK
+        run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" --sdk_root="$ANDROID_HOME"
+      - name: Build API JAR
+        run: |
+          export ANDROID_HOME=/usr/local/lib/android/sdk
+          export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
+          # Replace Gradle wrapper with one supporting Java 17
+          curl -fsSL -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/tigergalaxy1st/MiTrustBuster/main/gradle/wrapper/gradle-wrapper.jar"
+          printf 'distributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\nnetworkTimeout=10000\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists\n' > gradle/wrapper/gradle-wrapper.properties
+          # Replace build.gradle with modern AGP and mavenCentral
+          printf 'buildscript {\n    repositories {\n        google()\n        mavenCentral()\n    }\n    dependencies {\n        classpath "com.android.tools.build:gradle:8.1.0"\n    }\n}\nallprojects {\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n' > build.gradle
+          # Replace app/build.gradle with modern AGP
+          printf 'apply plugin: "com.android.application"\n\nandroid {\n    namespace "de.robv.android.xposed"\n    compileSdk 34\n\n    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }\n\n    defaultConfig {\n        minSdkVersion 21\n    }\n\n    sourceSets {\n        main {\n            java.srcDirs += ["src/main/apacheCommonsLang"]\n        }\n    }\n}\n\ndependencies {\n    compileOnly files(":hiddenapistubs")\n}\n' > app/build.gradle
+          # Replace hiddenapistubs/build.gradle
+          printf 'apply plugin: "com.android.library"\n\nandroid {\n    namespace "de.robv.android.xposed.hiddenapistubs"\n    compileSdk 34\n    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }\n}\n' > hiddenapistubs/build.gradle
+          ./gradlew :app:assembleRelease --no-daemon -q && echo "Build SUCCESS"
+          cp app/build/outputs/apk/app-release-unsigned.apk /tmp/api-82.jar
+      - name: Upload API JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: xposed-api-jar
+          path: /tmp/api-82.jar
