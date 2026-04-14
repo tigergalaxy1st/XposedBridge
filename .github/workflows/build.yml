@@ -33,13 +33,14 @@ jobs:
           curl -fsSL -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/tigergalaxy1st/MiTrustBuster/main/gradle/wrapper/gradle-wrapper.jar"
           printf 'distributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\nnetworkTimeout=10000\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists\n' > gradle/wrapper/gradle-wrapper.properties
           printf 'buildscript {\n    repositories {\n        google()\n        mavenCentral()\n    }\n    dependencies {\n        classpath "com.android.tools.build:gradle:8.1.0"\n    }\n}\nallprojects {\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n' > build.gradle
+          printf '' > app/build.gradle
           printf 'apply plugin: "com.android.library"\n\nandroid {\n    namespace "de.robv.android.xposed.hiddenapistubs"\n    compileSdk 34\n    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }\n}\n' > hiddenapistubs/build.gradle
           ./gradlew :app_disabled:assembleRelease --no-daemon -q && echo "Build SUCCESS"
           cp app_disabled/build/outputs/aar/app_disabled-release.aar /tmp/hidden.aar
           unzip -o /tmp/hidden.aar classes.jar -d /tmp/
           cp /tmp/classes.jar /tmp/api-82.jar
           printf '<?xml version="1.0" encoding="UTF-8"?><project><modelVersion>4.0.0</modelVersion><groupId>de.robv.android.xposed</groupId><artifactId>api</artifactId><version>82</version><packaging>jar</packaging></project>' > /tmp/api-82.pom
-          ls -lh /tmp/api-82.jar /tmp/api-82.pom
+          ls -lh /tmp/api-82.jar
       - name: Commit to MiTrustBuster
         run: |
           cd XB
