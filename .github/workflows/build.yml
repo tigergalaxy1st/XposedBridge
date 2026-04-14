@@ -30,16 +30,10 @@ jobs:
           export ANDROID_HOME=/usr/local/lib/android/sdk
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
           cd XB
-          # Replace Gradle wrapper with Java 17 compatible version
           curl -fsSL -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/tigergalaxy1st/MiTrustBuster/main/gradle/wrapper/gradle-wrapper.jar"
           printf 'distributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\nnetworkTimeout=10000\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists\n' > gradle/wrapper/gradle-wrapper.properties
           printf 'buildscript {\n    repositories {\n        google()\n        mavenCentral()\n    }\n    dependencies {\n        classpath "com.android.tools.build:gradle:8.1.0"\n    }\n}\nallprojects {\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n' > build.gradle
-          # Patch app/build.gradle for modern AGP
-          sed -i "s/namespace 'de.robv.android.xposed'/namespace \"de.robv.android.xposed\"/" app/build.gradle 2>/dev/null || true
-          sed -i "s/compileSdkVersion [0-9]*/compileSdk 34/" app/build.gradle 2>/dev/null || true
-          sed -i '/buildToolsVersion/d' app/build.gradle 2>/dev/null || true
-          printf '\nandroid {\n    namespace "de.robv.android.xposed"\n    compileSdk 34\n    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }\n}\n' >> app/build.gradle
-          # Patch hiddenapistubs/build.gradle
+          printf 'apply plugin: "com.android.application"\n\nandroid {\n    namespace "de.robv.android.xposed"\n    compileSdk 34\n    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }\n    lint { abortOnError false; checkReleaseBuilds false }\n}\n\ndependencies {\n    compileOnly files(":hiddenapistubs")\n}\n' > app/build.gradle
           printf 'apply plugin: "com.android.library"\n\nandroid {\n    namespace "de.robv.android.xposed.hiddenapistubs"\n    compileSdk 34\n    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }\n}\n' > hiddenapistubs/build.gradle
           ./gradlew :app:assembleRelease --no-daemon -q && echo "Build SUCCESS"
           cp app/build/outputs/apk/app-release-unsigned.apk /tmp/api-82.jar
@@ -49,17 +43,16 @@ jobs:
           cd XB
           git config user.email "ci@github-actions.local"
           git config user.name "GitHub Actions CI"
-          # Clone MiTrustBuster repo
           git remote add MT https://github.com/tigergalaxy1st/MiTrustBuster.git
           git fetch MT main
-          git checkout -B api-jar MT/main
+          git checkout -B api-jar MT/main 2>/dev/null || git checkout -B api-jar
           mkdir -p libs
           cp /tmp/api-82.jar libs/api-82.jar
           git add libs/api-82.jar
           if git diff --staged --quiet; then
-              echo "No changes - JAR is up to date"
+              echo "No changes"
           else
               git commit -m "Update XposedBridge API JAR from CI"
               git push -f MT api-jar:main
-              echo "JAR pushed successfully"
+              echo "Pushed successfully"
           fi
