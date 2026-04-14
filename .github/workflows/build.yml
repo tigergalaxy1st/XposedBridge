@@ -14,7 +14,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: XB
-          fetch-depth: 0
+          fetch-depth: 1
       - uses: actions/setup-java@v4
         with:
           java-version: '17'
@@ -25,7 +25,7 @@ jobs:
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
           $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0" --sdk_root="$ANDROID_HOME"
-      - name: Build XposedBridge classes.jar
+      - name: Build XposedBridge app_disabled module
         run: |
           export ANDROID_HOME=/usr/local/lib/android/sdk
           export PATH="$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH"
@@ -33,26 +33,29 @@ jobs:
           curl -fsSL -o gradle/wrapper/gradle-wrapper.jar "https://raw.githubusercontent.com/tigergalaxy1st/MiTrustBuster/main/gradle/wrapper/gradle-wrapper.jar"
           printf 'distributionBase=GRADLE_USER_HOME\ndistributionPath=wrapper/dists\ndistributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\nnetworkTimeout=10000\nzipStoreBase=GRADLE_USER_HOME\nzipStorePath=wrapper/dists\n' > gradle/wrapper/gradle-wrapper.properties
           printf 'buildscript {\n    repositories {\n        google()\n        mavenCentral()\n    }\n    dependencies {\n        classpath "com.android.tools.build:gradle:8.1.0"\n    }\n}\nallprojects {\n    repositories {\n        google()\n        mavenCentral()\n    }\n}\n' > build.gradle
-          printf 'apply plugin: "com.android.application"\n\nandroid {\n    namespace "de.robv.android.xposed"\n    compileSdk 34\n    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }\n    lint { abortOnError false; checkReleaseBuilds false }\n}\n\ndependencies {\n    compileOnly files(":hiddenapistubs")\n}\n' > app/build.gradle
           printf 'apply plugin: "com.android.library"\n\nandroid {\n    namespace "de.robv.android.xposed.hiddenapistubs"\n    compileSdk 34\n    compileOptions { sourceCompatibility JavaVersion.VERSION_1_8; targetCompatibility JavaVersion.VERSION_1_8 }\n}\n' > hiddenapistubs/build.gradle
-          ./gradlew :app:assembleRelease --no-daemon -q && echo "Build SUCCESS"
-          cp app/build/outputs/apk/app-release-unsigned.apk /tmp/api-82.jar
-          ls -lh /tmp/api-82.jar
-      - name: Commit JAR to MiTrustBuster
+          ./gradlew :app_disabled:assembleRelease --no-daemon -q && echo "Build SUCCESS"
+          cp app_disabled/build/outputs/aar/app_disabled-release.aar /tmp/hidden.aar
+          unzip -o /tmp/hidden.aar classes.jar -d /tmp/
+          cp /tmp/classes.jar /tmp/api-82.jar
+          printf '<?xml version="1.0" encoding="UTF-8"?><project><modelVersion>4.0.0</modelVersion><groupId>de.robv.android.xposed</groupId><artifactId>api</artifactId><version>82</version><packaging>jar</packaging></project>' > /tmp/api-82.pom
+          ls -lh /tmp/api-82.jar /tmp/api-82.pom
+      - name: Commit to MiTrustBuster
         run: |
           cd XB
           git config user.email "ci@github-actions.local"
           git config user.name "GitHub Actions CI"
           git remote add MT https://github.com/tigergalaxy1st/MiTrustBuster.git
-          git fetch MT main
-          git checkout -B api-jar MT/main 2>/dev/null || git checkout -B api-jar
+          git fetch MT main 2>/dev/null || true
+          git checkout -B api-jar MT/main 2>/dev/null || git checkout -B api-jar || true
           mkdir -p libs
           cp /tmp/api-82.jar libs/api-82.jar
-          git add libs/api-82.jar
+          cp /tmp/api-82.pom libs/api-82.pom
+          git add libs/api-82.jar libs/api-82.pom
           if git diff --staged --quiet; then
-              echo "No changes"
+              echo "No changes - JAR is up to date"
           else
-              git commit -m "Update XposedBridge API JAR from CI"
+              git commit -m "Update XposedBridge API JAR (v82)"
               git push -f MT api-jar:main
               echo "Pushed successfully"
           fi
